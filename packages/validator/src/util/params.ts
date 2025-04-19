@@ -227,7 +227,7 @@ function getSpecCriticalParams(localConfig: ChainConfig): Record<keyof ConfigWit
     FIELD_ELEMENTS_PER_BLOB: denebForkRelevant,
     MAX_BLOB_COMMITMENTS_PER_BLOCK: denebForkRelevant,
     KZG_COMMITMENT_INCLUSION_PROOF_DEPTH: denebForkRelevant,
-    MAX_BLOBS_PER_BLOCK: denebForkRelevant,
+    BLOB_SCHEDULE: denebForkRelevant,
 
     // ELECTRA
     MAX_DEPOSIT_REQUESTS_PER_PAYLOAD: electraForkRelevant,
@@ -246,7 +246,6 @@ function getSpecCriticalParams(localConfig: ChainConfig): Record<keyof ConfigWit
     WHISTLEBLOWER_REWARD_QUOTIENT_ELECTRA: electraForkRelevant,
     MAX_PER_EPOCH_ACTIVATION_EXIT_CHURN_LIMIT: electraForkRelevant,
     MIN_PER_EPOCH_CHURN_LIMIT_ELECTRA: electraForkRelevant,
-    MAX_BLOBS_PER_BLOCK_ELECTRA: electraForkRelevant,
 
     // FULU
     /////////////////
@@ -258,6 +257,5 @@ function getSpecCriticalParams(localConfig: ChainConfig): Record<keyof ConfigWit
     NODE_CUSTODY_REQUIREMENT: false,
     VALIDATOR_CUSTODY_REQUIREMENT: fuluForkRelevant,
     BALANCE_PER_ADDITIONAL_CUSTODY_GROUP: fuluForkRelevant,
-    MAX_BLOBS_PER_BLOCK_FULU: fuluForkRelevant,
   };
 }
