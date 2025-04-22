@@ -1,7 +1,9 @@
+import {CustodyConfig} from "../../../util/dataColumns.js";
 import {PeerIdStr} from "../../../util/peerId.js";
 import {shuffle} from "../../../util/shuffle.js";
 import {sortBy} from "../../../util/sortBy.js";
 import {Batch, BatchStatus} from "../batch.js";
+import {ChainTarget} from "./chainTarget.js";
 
 /**
  * Balance and organize peers to perform requests with a SyncChain
@@ -9,13 +11,23 @@ import {Batch, BatchStatus} from "../batch.js";
  */
 export class ChainPeersBalancer {
   private peers: PeerIdStr[];
-  private peerset: Map<PeerIdStr, {custodyColumns: number[]}>;
+  private columnsByPeer: Map<PeerIdStr, {custodyColumns: number[]}>;
+  private targetByPeer: Map<PeerIdStr, ChainTarget>;
   private activeRequestsByPeer = new Map<PeerIdStr, number>();
+  private readonly custodyConfig: CustodyConfig;
 
   // TODO: @matthewkeil check if this needs to be updated for custody groups
-  constructor(peers: PeerIdStr[], peerset: Map<PeerIdStr, {custodyColumns: number[]}>, batches: Batch[]) {
+  constructor(
+    peers: PeerIdStr[],
+    targetByPeer: Map<PeerIdStr, ChainTarget>,
+    columnsByPeer: Map<PeerIdStr, {custodyColumns: number[]}>,
+    batches: Batch[],
+    custodyConfig: CustodyConfig
+  ) {
     this.peers = shuffle(peers);
-    this.peerset = peerset;
+    this.targetByPeer = targetByPeer;
+    this.columnsByPeer = columnsByPeer;
+    this.custodyConfig = custodyConfig;
 
     // Compute activeRequestsByPeer from all batches internal states
     for (const batch of batches) {
@@ -38,13 +50,18 @@ export class ChainPeersBalancer {
     const failedPeers = new Set(batch.getFailedPeers());
     const sortedBestPeers = sortBy(
       this.peers.filter((peerId) => {
-        if (partialDownload === null) {
-          return true;
+        const pendingDataColumns = partialDownload
+          ? partialDownload.pendingDataColumns
+          : this.custodyConfig.sampledColumns;
+
+        const target = this.targetByPeer.get(peerId);
+        if (!target || target.slot < batch.request.startSlot) {
+          return false;
         }
 
-        const peerColumns = this.peerset.get(peerId)?.custodyColumns ?? [];
+        const peerColumns = this.columnsByPeer.get(peerId)?.custodyColumns ?? [];
         const columns = peerColumns.reduce((acc, elem) => {
-          if (partialDownload.pendingDataColumns.includes(elem)) {
+          if (pendingDataColumns.includes(elem)) {
             acc.push(elem);
           }
           return acc;
@@ -59,12 +76,34 @@ export class ChainPeersBalancer {
   }
 
   /**
-   * Return peers with 0 or no active requests
+   * Return peers with 0 or no active requests that has a higher target slot than this batch and has columns we need.
    */
-  idlePeers(): PeerIdStr[] {
-    return this.peers.filter((peer) => {
-      const activeRequests = this.activeRequestsByPeer.get(peer);
-      return activeRequests === undefined || activeRequests === 0;
-    });
+  idlePeerForBatch(batch: Batch): PeerIdStr | undefined {
+    const eligiblePeers: {peerId: PeerIdStr; columns: number}[] = [];
+    for (const peerId of this.peers) {
+      const activeRequests = this.activeRequestsByPeer.get(peerId);
+      if (activeRequests != null && activeRequests > 0) {
+        continue;
+      }
+      const target = this.targetByPeer.get(peerId);
+      if (!target || target.slot < batch.request.startSlot) {
+        continue;
+      }
+
+      const peerColumns = this.columnsByPeer.get(peerId)?.custodyColumns ?? [];
+      const columns = peerColumns.reduce((acc, elem) => {
+        if (this.custodyConfig.sampledColumns.includes(elem)) {
+          acc.push(elem);
+        }
+        return acc;
+      }, [] as number[]);
+
+      if (columns.length > 0) {
+        eligiblePeers.push({peerId, columns: columns.length});
+      }
+    }
+
+    // pick idle peer that has the most columns we need
+    return eligiblePeers.sort((a, b) => b.columns - a.columns)[0].peerId;
   }
 }

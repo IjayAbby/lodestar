@@ -9,6 +9,7 @@ import {IBeaconChain} from "../../chain/index.js";
 import {Metrics} from "../../metrics/index.js";
 import {INetwork} from "../../network/index.js";
 import {beaconBlocksMaybeBlobsByRange} from "../../network/reqresp/beaconBlocksMaybeBlobsByRange.js";
+import {CustodyConfig} from "../../util/dataColumns.js";
 import {PeerIdStr} from "../../util/peerId.js";
 import {RangeSyncType, getRangeSyncTarget, rangeSyncTypes} from "../utils/remoteSyncType.js";
 import {ChainTarget, SyncChain, SyncChainDebugState, SyncChainFns} from "./chain.js";
@@ -245,7 +246,7 @@ export class RangeSync extends (EventEmitter as {new (): RangeSyncEmitter}) {
           reportPeer: this.reportPeer,
           onEnd: this.onSyncChainEnd,
         },
-        {config: this.config, logger: this.logger}
+        {config: this.config, logger: this.logger, custodyConfig: this.chain.custodyConfig}
       );
       this.chains.set(syncType, syncChain);
 

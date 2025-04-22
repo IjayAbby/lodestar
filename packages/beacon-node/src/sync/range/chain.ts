@@ -5,6 +5,7 @@ import {ErrorAborted, Logger, toRootHex} from "@lodestar/utils";
 import {BlockInput, BlockInputDataColumns, BlockInputType} from "../../chain/blocks/types.js";
 import {PeerAction, prettyPrintPeerIdStr} from "../../network/index.js";
 import {PartialDownload} from "../../network/reqresp/beaconBlocksMaybeBlobsByRange.js";
+import {CustodyConfig} from "../../util/dataColumns.js";
 import {ItTrigger} from "../../util/itTrigger.js";
 import {PeerIdStr} from "../../util/peerId.js";
 import {wrapError} from "../../util/wrapError.js";
@@ -25,6 +26,7 @@ import {
 
 export type SyncChainModules = {
   config: ChainForkConfig;
+  custodyConfig: CustodyConfig;
   logger: Logger;
 };
 
@@ -117,6 +119,7 @@ export class SyncChain {
 
   private readonly logger: Logger;
   private readonly config: ChainForkConfig;
+  private readonly custodyConfig: CustodyConfig;
 
   constructor(
     initialBatchEpoch: Epoch,
@@ -133,6 +136,7 @@ export class SyncChain {
     this.downloadBeaconBlocksByRange = fns.downloadBeaconBlocksByRange;
     this.reportPeer = fns.reportPeer;
     this.config = modules.config;
+    this.custodyConfig = modules.custodyConfig;
     this.logger = modules.logger;
     this.logId = `${syncType}`;
 
@@ -340,7 +344,13 @@ export class SyncChain {
       return;
     }
 
-    const peerBalancer = new ChainPeersBalancer(peers, this.peersetCustody, toArr(this.batches));
+    const peerBalancer = new ChainPeersBalancer(
+      peers,
+      this.peerset,
+      this.peersetCustody,
+      toArr(this.batches),
+      this.custodyConfig
+    );
 
     // Retry download of existing batches
     for (const batch of this.batches.values()) {
@@ -355,12 +365,15 @@ export class SyncChain {
     }
 
     // find the next pending batch and request it from the peer
-    for (const peer of peerBalancer.idlePeers()) {
-      const batch = this.includeNextBatch();
-      if (!batch) {
+    let batch = this.includeNextBatch();
+    while (batch != null) {
+      const peer = peerBalancer.idlePeerForBatch(batch);
+      if (!peer) {
+        // if there is no peer available, we stop requesting batches because next batches will have greater startEpoch with the same sampling groups
         break;
       }
       void this.sendBatch(batch, peer);
+      batch = this.includeNextBatch();
     }
   }
 
