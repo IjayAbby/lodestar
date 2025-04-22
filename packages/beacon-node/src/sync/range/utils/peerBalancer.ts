@@ -104,6 +104,7 @@ export class ChainPeersBalancer {
     }
 
     // pick idle peer that has the most columns we need
-    return eligiblePeers.sort((a, b) => b.columns - a.columns)[0].peerId;
+    const mostColumnsPeer = eligiblePeers.sort((a, b) => b.columns - a.columns)[0];
+    return mostColumnsPeer?.peerId;
   }
 }
